@@ -1,0 +1,12 @@
+# Avoid mac files
+.DS_Store
+# Avoid compress files
+*.sip
+*.zip
+*.rar
+*.gz
+# Avoid nii images
+*.nii
+*.nii.gz
+# Avoid csvs
+*.csv
