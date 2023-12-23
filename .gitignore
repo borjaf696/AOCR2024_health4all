@@ -10,3 +10,5 @@
 *.nii.gz
 # Avoid csvs
 *.csv
+# Avoid the models stored
+model_store/*
