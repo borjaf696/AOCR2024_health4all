@@ -12,3 +12,7 @@
 *.csv
 # Avoid the models stored
 model_store/*
+tmp/*
+*.pth
+# Avoid compiled environment
+poetry.lock
