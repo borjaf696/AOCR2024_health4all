@@ -1,17 +1,21 @@
 [tool.poetry]
-name = "accute-appendix-torch"
+name = "AOCR2024_pvt"
 version = "0.1.0"
-description = "Accute appendix "
+description = "Accute appendix"
 authors = ["email"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
-torch = "^1.8"
+python = "^3.11"
+torch = {version = "2.1.2", extras = ["cuda"]}
 pandas = "^1.3"
-scikit-learn = "^0.24"
 matplotlib = "^3.4"
 torchio = "^0.18"
 ipywidgets = "^8.1.1"
+torchvision = "0.16.2"
+ipykernel = "^6.28.0"
+kaggle = "^1.6.3"
+mmcv = "^2.1.0"
+torchsummary = "^1.5.1"
 
 [tool.poetry.dev-dependencies]
 notebook = "^6.4"

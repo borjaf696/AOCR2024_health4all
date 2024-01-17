@@ -32,19 +32,11 @@ poetry lock
 poetry install
 ```
 
-Add ipywidgets:
+## Download the data from Kaggle
+
+Get your kaggle token from the web and move it to  `~/.kaggle/`:
 
 ```bash
-poetry add ipywidgets
-poetry update
-```
-
-## Load the data
-
-Install Kaggle extension:
-
-```bash
-pip install kaggle
 mv kaggle.json ~/.kaggle/
 ```
 
@@ -61,3 +53,5 @@ kaggle datasets list
 ```bash
 kaggle competitions download -c aocr2024
 ```
+
+Once the data is downloaded we need to uncompress it. The training, and test data is compressed within the compressed file, thus we need to uncompress them as well.
