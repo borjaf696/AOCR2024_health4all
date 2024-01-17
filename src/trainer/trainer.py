@@ -38,9 +38,9 @@ class DefaultTrainer:
         model.train()
         # Load model if exists
         try:
-            file_name = "../tmp/tmp_execution_8.pth"
+            file_name = "tmp/tmp_execution_17.pth"
             model.load_state_dict(torch.load(file_name))
-            original_epochs = file_name.split(".")[2].split("_")[-1]
+            original_epochs = file_name.split(".")[0].split("_")[-1]
             print(f"Loaded the model from {file_name}")
         except Exception as e:
             original_epochs = 0
@@ -96,3 +96,5 @@ class DefaultTrainer:
                 print(f"Validation accuracy: {average_accuracy * 100:.2f}% Validation items: {valid_total_predictions}")
             # Store the current model just in case of failure
             torch.save(model.state_dict(), f'tmp/tmp_execution_{int(epoch) + int(original_epochs) + 1}.pth')
+        
+        return model

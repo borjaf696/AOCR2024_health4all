@@ -55,3 +55,11 @@ kaggle competitions download -c aocr2024
 ```
 
 Once the data is downloaded we need to uncompress it. The training, and test data is compressed within the compressed file, thus we need to uncompress them as well.
+
+## Run
+
+There are notebooks with trials and tests. Nevertheless, I encourage to use the code which is completely functional. To do so simply run:
+
+```
+poetry run 
+```
