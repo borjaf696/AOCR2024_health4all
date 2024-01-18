@@ -24,6 +24,8 @@ class DefaultTrainer:
             model = ModifiedR3D18().to(self.__device)
         elif selected_model == "mc3_18":
             model = ModifiedMC3_18().to(self.__device)
+        elif selected_model == "efficientnet_v2":
+            model = ModifiedEfficientNetv2().to(self.__device)
         else:
             raise RuntimeError
         # Report model summary

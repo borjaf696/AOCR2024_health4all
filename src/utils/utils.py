@@ -4,16 +4,25 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd
+import time
+
+from tqdm import tqdm
+from torch.utils.data import DataLoader, TensorDataset
+
 
 
 class PreprocessUtilities:
     @staticmethod
-    def crop_volume(volume, min_bounds, max_bounds):
-        cropped_volume = volume[min_bounds[0]:max_bounds[0]+1,
-                                min_bounds[1]:max_bounds[1]+1,
-                                min_bounds[2]:max_bounds[2]+1]
+    def crop_volume(volume, min_bounds, max_bounds, filter_depth = True):
+        if filter_depth:
+            cropped_volume = volume[min_bounds[0]:max_bounds[0]+1,
+                                    min_bounds[1]:max_bounds[1]+1,
+                                    min_bounds[2]:max_bounds[2]+1]
+        else:
+            cropped_volume = volume[min_bounds[0]:max_bounds[0]+1,
+                                    min_bounds[1]:max_bounds[1]+1,
+                                    min_bounds[2]:max_bounds[2]+1]
         return cropped_volume
 
     @staticmethod
@@ -84,7 +93,10 @@ class PreprocessUtilities:
         return True
 
     @staticmethod
-    def preprocess_nii_images(folder:str , output_folder: str = "aocr2024/preprocessed_images/", bounds: list = None):
+    def preprocess_nii_images(folder:str , output_folder: str = "aocr2024/preprocessed_images/", bounds: list = None, filter_depth: bool = True):
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+            print(f"Created: {output_folder}")
         min_shape_image = [
             int(bounds[1][0] - bounds[0][0]) + 1, 
             int(bounds[1][1] - bounds[0][1]) + 1, 
@@ -105,7 +117,8 @@ class PreprocessUtilities:
                 preprocessed_image = PreprocessUtilities.crop_volume(
                     image_array_torch,
                     bounds[0],
-                    bounds[1]
+                    bounds[1], 
+                    filter_depth
                 )
                 if not PreprocessUtilities.check_shapes(preprocessed_image.shape, min_shape_image):
                     removed_images += 1
@@ -133,6 +146,32 @@ class PreprocessUtilities:
         print(f"Percentage removed: {removed_images / i * 100:.2f}%")
         return reductions_stored
     
+    def convert_3d_to_2d(input_folder, output_folder):
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        files = os.listdir(input_folder)
+        total_files = len(files)
+        progress_bar = tqdm(files, total=total_files)
+        for file_name in progress_bar:
+            if file_name.endswith('.nii.gz'):
+                file_path = os.path.join(input_folder, file_name)
+
+                img_3d = nib.load(file_path)
+                data_3d = img_3d.get_fdata()
+
+                for i in range(data_3d.shape[2]):
+                    slice_2d = data_3d[:, :, i]
+                    slice_img = nib.Nifti1Image(slice_2d, affine=img_3d.affine)
+                    file_name_splitted = file_name.split(".")
+                    file_name_splitted[0] = f"{file_name_splitted}_{i}"
+                    slice_file_name = ".".join(file_name_splitted)
+                    nib.save(slice_img, os.path.join(output_folder, slice_file_name))
+            progress_bar.set_postfix(
+                {
+                    'lastest_file_processed': file_name
+                }
+            )
     @staticmethod
     def crop_images_with_calculated_bounds(folder_masks = "aocr2024/2_Train,Valid_Mask/"):
         # Get the global bounds
@@ -150,4 +189,119 @@ class PreprocessUtilities:
             output_folder = "aocr2024/preprocessed_images_test/"
         )
         # TODO: store and report some metrics for ratio reductions.
-            
+    
+    @staticmethod
+    def has_ones(
+        volume
+    ):
+        nonzero_indices = torch.nonzero(volume > 0)
+        return 0 if nonzero_indices.nelement() == 0 else 0
+    
+    @staticmethod
+    def calculate_labels_based_on_masks(
+        output_file = "aocr2024/TrainValid_ground_truth_slices.csv", 
+        output_file_valid_split = "aocr2024/TrainValid_split_slices.csv",
+        valid_split_file = "aocr2024/TrainValid_split.csv",
+        folder_masks = "aocr2024/2_Train,Valid_Mask/"
+    ):
+        df_valid_split = pd.read_csv(valid_split_file)
+        images = []
+        classes = []
+        group = []
+        files = os.listdir(folder_masks)
+        total_files = len(files)
+        progress_bar = tqdm(files, total=total_files)
+        for file_name in progress_bar:
+            if file_name.endswith('.nii.gz'):
+                file_path = os.path.join(folder_masks, file_name)
+                img_3d = nib.load(file_path)
+                data_3d = torch.from_numpy(img_3d.get_fdata())
+                file_name_splitted = file_name.split(".")
+                original_image_id = file_name_splitted[0]
+                group_image = str(
+                    df_valid_split.loc[
+                        df_valid_split.id == original_image_id[:-6],
+                        "group"
+                    ].iloc[0]
+                )
+                for i in range(data_3d.shape[2]):
+                    _class = torch.any(data_3d[:, :, i])
+                    file_name_splitted[0] = f"{original_image_id}_{i}"
+                    image_filename = ".".join(file_name_splitted)
+                    images.append(image_filename)
+                    classes.append(_class)
+                    group.append(group_image)
+            progress_bar.set_postfix({'lastest_file_processed': file_name})
+        # Ground truth
+        pd.DataFrame(zip(images,classes),
+            columns = [
+                "id",
+                "label"
+            ]
+        ).to_csv(output_file)
+        # Valid split
+        pd.DataFrame(zip(images,classes, group),
+            columns = [
+                "id",
+                "slice-level-label",
+                "group"
+            ]
+        ).to_csv(output_file_valid_split)
+
+    # For slice prediction
+    @staticmethod
+    def images_from_3d_to_2d(
+        folder_images_train = "aocr2024/1_Train,Valid_Image/", 
+        folder_images_test = "aocr2024/3_Test1_Image/",
+        folder_masks = "aocr2024/2_Train,Valid_Mask/"
+    ):
+        # Calculate the volume, but in this case we only filter the w and h
+        start_time = time.time()
+        # global_min, global_max = PreprocessUtilities.calculate_bounds(folder_masks)
+        # print(f"Thresholds - min {global_min}, max {global_max}")
+        end_time = time.time()
+        print(f"Time calculate bounds: {end_time - start_time:.2f}s")
+        # Crop the images with the new bounds
+        start_time = time.time()
+        """ratios_training = PreprocessUtilities.preprocess_nii_images(
+            folder = folder_images_train, 
+            bounds = [global_min,  global_max], 
+            output_folder = "aocr2024/preprocessed_images_2d_tmp/",
+            filter_depth = False
+        )"""
+        end_time = time.time()
+        print(f"Time preprocess training images (volumes): {end_time - start_time:.2f}s")
+        start_time = time.time()
+        """ratios_test = PreprocessUtilities.preprocess_nii_images(
+            folder = folder_images_test, 
+            bounds = [global_min,  global_max], 
+            output_folder = "aocr2024/preprocessed_images_test_2d_tmp/",
+            filter_depth = False
+        )"""
+        end_time = time.time()
+        print(f"Time preprocess tests images (volumes): {end_time - start_time:.2f}s")
+        # From 3d to 2d
+        print(f"From 3d to 2d the training images")
+        start_time = time.time()
+        """PreprocessUtilities.convert_3d_to_2d(
+            input_folder = "aocr2024/preprocessed_images_2d_tmp/",
+            output_folder = "aocr2024/preprocessed_images_2d/"
+        )"""
+        end_time = time.time()
+        print(f"Time convert training images from 3d to 2d: {end_time - start_time:.2f}s")
+        print(f"From 3d to 2d the test images")
+        start_time = time.time()
+        """PreprocessUtilities.convert_3d_to_2d(
+            input_folder = "aocr2024/preprocessed_images_test_2d_tmp/",
+            output_folder = "aocr2024/preprocessed_images_2d/"
+        )"""
+        end_time = time.time()
+        print(f"Time convert testing images from 3d to 2d: {end_time - start_time:.2f}s")
+        # Adding the labels:
+        start_time = time.time()
+        PreprocessUtilities.calculate_labels_based_on_masks(
+            folder_masks = folder_masks,
+            output_file = "aocr2024/TrainValid_ground_truth_slices.csv"
+        )
+        end_time = time.time()
+        print(f"Time calculate the labels by using the masks: {end_time - start_time:.2f}s")

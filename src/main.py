@@ -25,45 +25,79 @@ from src.utils.utils import (
 
 filter_masks = False
 
-selected_model = "r3d18"
+selected_model_volumes = "r3d18"
+selected_model_slices = "efficientnet_v2"
 batch_size = 8
-device = torch.device("cpu")
+device_volumes = torch.device("cpu")
+device_slices = torch.device("mps")
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Controla el comportamiento del script.")
-    parser.add_argument('--filter_masks', action='store_true', default = True)
+    parser = argparse.ArgumentParser(description="Arguments to control the code flow")
+    parser.add_argument('--preprocess', action='store_true', default = True)
     parser.add_argument('--train_model', action='store_true', default = True)
     parser.add_argument('--test_model', action='store_true', default = True)
 
     return parser.parse_args()
 
+# TODO: Do better
+def train_volumes(selected_model = selected_model_volumes):
+    train_dataset, val_dataset = DataLoaderCustom.get_train_val_datasets(
+        image_dir="aocr2024/preprocessed_images/",
+        labels_file = "aocr2024/TrainValid_ground_truth.csv",
+        validation_file = "aocr2024/TrainValid_split.csv"
+    )
+    train_loader, val_loader = DataLoaderCustom.get_train_val_dataloaders(
+        train_dataset = train_dataset,
+        val_dataset = val_dataset,
+        batch_size = batch_size
+    )
+    # Train de model
+    trainer = DefaultTrainer(device = device_volumes)
+    model = trainer.fit(
+        train_loader = train_loader,
+        val_loader = val_loader,
+        selected_model = selected_model
+    )
+    return model
+
+def train_slices(selected_model = selected_model_slices):
+    train_dataset, val_dataset = DataLoaderCustom.get_train_val_datasets(
+        image_dir="aocr2024/preprocessed_images_2d/",
+        labels_file = "aocr2024/TrainValid_ground_truth_slices.csv",
+        validation_file = "aocr2024/TrainValid_split_slices.csv"
+    )
+    train_loader, val_loader = DataLoaderCustom.get_train_val_dataloaders(
+        train_dataset = train_dataset,
+        val_dataset = val_dataset,
+        batch_size = batch_size
+    )
+    # Train de model
+    trainer = DefaultTrainer(device = device_volumes)
+    model = trainer.fit(
+        train_loader = train_loader,
+        val_loader = val_loader,
+        selected_model = selected_model
+    )
+    return model
+
 if __name__ == "__main__":
     args = parse_args()
     print(f"Args: {args}")
-    if args.filter_masks:
+    if args.preprocess:
         print(f"Using the masks to filter the images")
-        PreprocessUtilities.crop_images_with_calculated_bounds()
+        # PreprocessUtilities.crop_images_with_calculated_bounds()
+        print(f"Transforming 3D images into a set of 2D images, and adjusting the labels")
+        PreprocessUtilities.images_from_3d_to_2d()
+        import sys
+        sys.exit()
 
     print(f"Running the model: {selected_model}")
     # Create the loaders
     if args.train_model:
-        train_dataset, val_dataset = DataLoaderCustom.get_train_val_datasets(
-            image_dir="aocr2024/preprocessed_images/",
-            labels_file = "aocr2024/TrainValid_ground_truth.csv",
-            validation_file = "aocr2024/TrainValid_split.csv"
-        )
-        train_loader, val_loader = DataLoaderCustom.get_train_val_dataloaders(
-            train_dataset = train_dataset,
-            val_dataset = val_dataset,
-            batch_size = batch_size
-        )
-        # Train de model
-        trainer = DefaultTrainer(device = device)
-        model = trainer.fit(
-            train_loader = train_loader,
-            val_loader = val_loader,
-            selected_model = selected_model
-        )
+        model_volumes = train_volumes()
+        model_slices = train_slices()
+
+    if args.test_model:
         # Test dataset
         test_dataset = LazyImageDataset(
             image_dir = "../aocr2024/preprocessed_images_test/",
@@ -71,7 +105,6 @@ if __name__ == "__main__":
             validation_file = "../aocr2024/TrainValid_split.csv",
             split = "Test",
         )
-    if args.test_model:
         # Test loader
         test_loader = DataLoader(
             test_dataset,
