@@ -60,6 +60,12 @@ Once the data is downloaded we need to uncompress it. The training, and test dat
 
 There are notebooks with trials and tests. Nevertheless, I encourage to use the code which is completely functional. To do so simply run:
 
+```bash
+poetry run python src/main.py
 ```
-poetry run 
+
+Without preprocessment:
+
+```bash
+poetry run python src/main.py --preprocess False
 ```

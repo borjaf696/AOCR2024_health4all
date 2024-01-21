@@ -9,8 +9,74 @@ import time
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
+from pydantic import BaseModel
 
+# TODO: move to another file
+class ClassificationMetrics():
+    def __init__(self, tp: int, tn: int, fp: int, fn: int):
+        self.true_positives = tp
+        self.true_negatives = tn
+        self.false_positives = fp
+        self.false_negatives = fn
 
+    @property
+    def precision(self) -> float:
+        try:
+            return self.true_positives / (self.true_positives + self.false_positives)
+        except ZeroDivisionError:
+            return 1.0
+
+    @property
+    def recall(self) -> float:
+        try:
+            return self.true_positives / (self.true_positives + self.false_negatives)
+        except ZeroDivisionError:
+            return 1.0
+
+    @property
+    def accuracy(self) -> float:
+        try:
+            return (self.true_positives + self.true_negatives) / \
+                   (self.true_positives + self.true_negatives + self.false_positives + self.false_negatives)
+        except ZeroDivisionError:
+            return 0.0
+
+    @property
+    def f1_score(self) -> float:
+        try:
+            precision = self.precision
+            recall = self.recall
+            return 2 * (precision * recall) / (precision + recall)
+        except ZeroDivisionError:
+            return 0.0
+        
+    def __add__(self, other):
+        if not isinstance(other, ClassificationMetrics):
+            return NotImplemented
+        return ClassificationMetrics(
+            self.true_positives + other.true_positives,
+            self.true_negatives + other.true_negatives,
+            self.false_positives + other.false_positives,
+            self.false_negatives + other.false_negatives,
+        )
+
+    def __str__(self):
+        return f"tp: {self.true_positives} fp: {self.false_positives} tn: {self.true_negatives} fn: {self.false_negatives}"
+
+        
+class MetricUtils:
+    @staticmethod
+    def calculate_metrics(pred: list[int], real: list[int]) -> ClassificationMetrics:
+        pred_real = zip(pred, real)
+        tp, tn, fp, fn = 0, 0, 0, 0
+        for p, r in pred_real:
+            p = int(p)
+            r = int(r)
+            tp += (p == r == 1)
+            tn += (p == r == 0)
+            fp += ((p == 1) and (r == 0))
+            fn += ((p == 0) and (r == 1))
+        return ClassificationMetrics(tp, tn, fp, fn)
 
 class PreprocessUtilities:
     @staticmethod
@@ -93,7 +159,12 @@ class PreprocessUtilities:
         return True
 
     @staticmethod
-    def preprocess_nii_images(folder:str , output_folder: str = "aocr2024/preprocessed_images/", bounds: list = None, filter_depth: bool = True):
+    def preprocess_nii_images(
+        folder:str, 
+        output_folder: str = "aocr2024/preprocessed_images/", 
+        bounds: list = None, 
+        filter_depth: bool = True
+    ):
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
             print(f"Created: {output_folder}")
@@ -159,12 +230,12 @@ class PreprocessUtilities:
 
                 img_3d = nib.load(file_path)
                 data_3d = img_3d.get_fdata()
-
+                file_name_splitted = file_name.split(".")
+                original_image_id = file_name_splitted[0][:-6]
                 for i in range(data_3d.shape[2]):
                     slice_2d = data_3d[:, :, i]
                     slice_img = nib.Nifti1Image(slice_2d, affine=img_3d.affine)
-                    file_name_splitted = file_name.split(".")
-                    file_name_splitted[0] = f"{file_name_splitted}_{i}"
+                    file_name_splitted[0] = f"{original_image_id}_{i}"
                     slice_file_name = ".".join(file_name_splitted)
                     nib.save(slice_img, os.path.join(output_folder, slice_file_name))
             progress_bar.set_postfix(
@@ -217,19 +288,18 @@ class PreprocessUtilities:
                 img_3d = nib.load(file_path)
                 data_3d = torch.from_numpy(img_3d.get_fdata())
                 file_name_splitted = file_name.split(".")
-                original_image_id = file_name_splitted[0]
+                original_image_id = file_name_splitted[0][:-6]
                 group_image = str(
                     df_valid_split.loc[
-                        df_valid_split.id == original_image_id[:-6],
+                        df_valid_split.id == original_image_id,
                         "group"
                     ].iloc[0]
                 )
                 for i in range(data_3d.shape[2]):
                     _class = torch.any(data_3d[:, :, i])
-                    file_name_splitted[0] = f"{original_image_id}_{i}"
-                    image_filename = ".".join(file_name_splitted)
+                    image_filename = f"{original_image_id}_{i}"
                     images.append(image_filename)
-                    classes.append(_class)
+                    classes.append(int(_class))
                     group.append(group_image)
             progress_bar.set_postfix({'lastest_file_processed': file_name})
         # Ground truth
@@ -238,7 +308,7 @@ class PreprocessUtilities:
                 "id",
                 "label"
             ]
-        ).to_csv(output_file)
+        ).to_csv(output_file, index = False)
         # Valid split
         pd.DataFrame(zip(images,classes, group),
             columns = [
@@ -246,7 +316,7 @@ class PreprocessUtilities:
                 "slice-level-label",
                 "group"
             ]
-        ).to_csv(output_file_valid_split)
+        ).to_csv(output_file_valid_split, index = False)
 
     # For slice prediction
     @staticmethod
@@ -257,44 +327,44 @@ class PreprocessUtilities:
     ):
         # Calculate the volume, but in this case we only filter the w and h
         start_time = time.time()
-        # global_min, global_max = PreprocessUtilities.calculate_bounds(folder_masks)
-        # print(f"Thresholds - min {global_min}, max {global_max}")
+        global_min, global_max = PreprocessUtilities.calculate_bounds(folder_masks)
+        print(f"Thresholds - min {global_min}, max {global_max}")
         end_time = time.time()
         print(f"Time calculate bounds: {end_time - start_time:.2f}s")
         # Crop the images with the new bounds
         start_time = time.time()
-        """ratios_training = PreprocessUtilities.preprocess_nii_images(
+        ratios_training = PreprocessUtilities.preprocess_nii_images(
             folder = folder_images_train, 
             bounds = [global_min,  global_max], 
             output_folder = "aocr2024/preprocessed_images_2d_tmp/",
             filter_depth = False
-        )"""
+        )
         end_time = time.time()
         print(f"Time preprocess training images (volumes): {end_time - start_time:.2f}s")
         start_time = time.time()
-        """ratios_test = PreprocessUtilities.preprocess_nii_images(
+        ratios_test = PreprocessUtilities.preprocess_nii_images(
             folder = folder_images_test, 
             bounds = [global_min,  global_max], 
             output_folder = "aocr2024/preprocessed_images_test_2d_tmp/",
             filter_depth = False
-        )"""
+        )
         end_time = time.time()
         print(f"Time preprocess tests images (volumes): {end_time - start_time:.2f}s")
         # From 3d to 2d
         print(f"From 3d to 2d the training images")
         start_time = time.time()
-        """PreprocessUtilities.convert_3d_to_2d(
+        PreprocessUtilities.convert_3d_to_2d(
             input_folder = "aocr2024/preprocessed_images_2d_tmp/",
             output_folder = "aocr2024/preprocessed_images_2d/"
-        )"""
+        )
         end_time = time.time()
         print(f"Time convert training images from 3d to 2d: {end_time - start_time:.2f}s")
         print(f"From 3d to 2d the test images")
         start_time = time.time()
-        """PreprocessUtilities.convert_3d_to_2d(
+        PreprocessUtilities.convert_3d_to_2d(
             input_folder = "aocr2024/preprocessed_images_test_2d_tmp/",
-            output_folder = "aocr2024/preprocessed_images_2d/"
-        )"""
+            output_folder = "aocr2024/preprocessed_images_test_2d/"
+        )
         end_time = time.time()
         print(f"Time convert testing images from 3d to 2d: {end_time - start_time:.2f}s")
         # Adding the labels:

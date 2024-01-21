@@ -27,6 +27,9 @@ class ModifiedR3D18(nn.Module):
     def to_device(self, device):
         self.r3d_18 = self.r3d_18.to(device)
 
+    def load_weights(self, path_file: str):
+        self.load_state_dict(torch.load(path_file))
+
     def forward(self, x):
         return self.r3d_18(x)
     
@@ -47,22 +50,31 @@ class ModifiedMC3_18(nn.Module):
     def to_device(self, device):
         self.mc3_18 = self.mc3_18.to(device)
 
+    def load_weights(self, path_file: str):
+        self.load_state_dict(torch.load(path_file))
+
     def forward(self, x):
         return self.mc3_18(x)
     
     def summary(self, input_size):
         summary(self, input_size=input_size)
 
-class ModifiedEfficientNetv2:
-
+class ModifiedEfficientNetv2(nn.Module):
     def __init__(self):
         super(ModifiedEfficientNetv2, self).__init__()
-        self.en2 = timm.create_model("efficientnet_v2s", pretrained = True)
+        # Model: efficientnetv2
+        # Model variant: rw
+        # Size: m
+        # Training algo: agc_in1k (adaptive gradient clipping with 1000 classes)
+        self.en2 = timm.create_model('efficientnetv2_rw_m.agc_in1k', pretrained = True)
         num_features = self.en2.get_classifier().in_features
         self.en2.classifier = nn.Linear(num_features, 1)
 
     def to_device(self, device):
         self.en2 = self.en2.to(device)
+
+    def load_weights(self, path_file: str):
+        self.en2.load_state_dict(torch.load(path_file))
 
     def forward(self, x):
         return self.en2(x)
