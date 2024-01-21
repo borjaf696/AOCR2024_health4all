@@ -16,3 +16,4 @@ tmp/*
 *.pth
 # Avoid compiled environment
 poetry.lock
+*.pyc
