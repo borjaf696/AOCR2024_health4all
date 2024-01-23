@@ -88,7 +88,7 @@ class LazyImageDataset(Dataset):
         self.image_filenames = set()
         if debug:
             for i, filename in enumerate(os.listdir(image_dir)):
-                if i > 1000:
+                if i > 4:
                     break
                 self.image_filenames.add(filename.split(".")[0])
         else:
@@ -134,7 +134,6 @@ class LazyImageDataset(Dataset):
         # Get label
         id = self.image_filenames[idx].split(".")[0]
         label = self.labels[id]
-
         return image, label
     
     def get_labels(self):

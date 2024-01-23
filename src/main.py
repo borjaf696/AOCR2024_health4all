@@ -30,13 +30,13 @@ filter_masks = False
 
 selected_model_volumes = "r3d18"
 selected_model_slices = "efficientnet_v2"
-batch_size_volumes = 4
+batch_size_volumes = 8
 batch_size_slices = 64
 device_volumes = torch.device("cpu")
 device_slices = torch.device("mps")
 
 last_model_files = {
-    "scan": "tmp/tmp_execution_17.pth",
+    "scan": "tmp/scan_r3d18_execution_15.pth",
     "slices": "tmp/slices_execution_5.pth"
 }
 
@@ -75,7 +75,10 @@ def load_model(
     return trainer.get_model()
 
 # TODO: Do better
-def train_volumes(selected_model = selected_model_volumes):
+def train_volumes(
+        selected_model = selected_model_volumes, 
+        type_of_model: str = "scan"
+    ):
     train_dataset, val_dataset = DataLoaderCustom.get_train_val_datasets(
         image_dir="aocr2024/preprocessed_images/",
         labels_file = "aocr2024/TrainValid_ground_truth.csv",
@@ -90,8 +93,8 @@ def train_volumes(selected_model = selected_model_volumes):
     trainer = DefaultTrainer(
         device = device_volumes,
         selected_model = selected_model,
-        preffix_model = "scan",
-        weights_file = "tmp/tmp_execution_17.pth"
+        preffix_model = type_of_model,
+        weights_file = last_model_files[type_of_model]
     )
     model = trainer.fit(
         train_loader = train_loader,
@@ -176,16 +179,16 @@ if __name__ == "__main__":
     print(f"Args: {args}")
     if args.preprocess:
         print(f"Using the masks to filter the images")
-        # PreprocessUtilities.crop_images_with_calculated_bounds()
+        PreprocessUtilities.crop_images_with_calculated_bounds()
         print(f"Transforming 3D images into a set of 2D images, and adjusting the labels")
-        PreprocessUtilities.images_from_3d_to_2d()
+        # PreprocessUtilities.images_from_3d_to_2d()
 
     # Create the loaders
     if args.train_model:
         print(f"Training the volumes model: {selected_model_volumes}")
         model_volumes = train_volumes()
         print(f"Training the slices model: {selected_model_slices}")
-        # model_slices = train_slices()
+        model_slices = train_slices()
         import sys
         print(f"Exiting")
         sys.exit()
@@ -197,12 +200,16 @@ if __name__ == "__main__":
             selected_model = selected_model_volumes,
             type_of_model = "scan"
         )
+        # Change to eval mode
+        model_volumes.eval()
         # Slices trainer/model
         model_slices = load_model(
             device = device_slices,
             selected_model = selected_model_slices,
             type_of_model = "slices"
         )
+        # Switch to eval mode
+        model_slices.eval()
 
     if args.test_model:
         # Prediction volumes

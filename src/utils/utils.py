@@ -88,7 +88,7 @@ class PreprocessUtilities:
         else:
             cropped_volume = volume[min_bounds[0]:max_bounds[0]+1,
                                     min_bounds[1]:max_bounds[1]+1,
-                                    min_bounds[2]:max_bounds[2]+1]
+                                    :]
         return cropped_volume
 
     @staticmethod
@@ -121,9 +121,11 @@ class PreprocessUtilities:
         return image_nifti.get_fdata()
 
     @staticmethod
-    def calculate_bounds(mask_folder):
+    def calculate_bounds(mask_folder, images_to_load = 100):
         global_max, global_min = None, None
         for i, file_name in enumerate(os.listdir(mask_folder)):
+            if i >= images_to_load:
+                break
             if file_name.endswith('.nii.gz'):
                 mask_image = torch.from_numpy(
                     PreprocessUtilities.load_nii_image(
@@ -173,6 +175,7 @@ class PreprocessUtilities:
             int(bounds[1][1] - bounds[0][1]) + 1, 
             int(bounds[1][2] - bounds[0][2]) + 1
         ]
+        print(f"New shape: {min_shape_image}")
         reductions_stored = []
         removed_images = 0
         for i, file_name in enumerate(os.listdir(folder)):
@@ -191,7 +194,7 @@ class PreprocessUtilities:
                     bounds[1], 
                     filter_depth
                 )
-                if not PreprocessUtilities.check_shapes(preprocessed_image.shape, min_shape_image):
+                if not PreprocessUtilities.check_shapes(preprocessed_image.shape, min_shape_image) and filter_depth:
                     removed_images += 1
                     continue
                 preprocessed_image = PreprocessUtilities.repeat_permute_images(
@@ -214,7 +217,7 @@ class PreprocessUtilities:
                 nib.save(nifti_image, f"{output_folder}/{file_name}")
                 
         print(f"Preprocessed and stored {i} images")
-        print(f"Percentage removed: {removed_images / i * 100:.2f}%")
+        print(f"Percentage removed: {removed_images / (i + 1) * 100:.2f}%")
         return reductions_stored
     
     def convert_3d_to_2d(input_folder, output_folder):

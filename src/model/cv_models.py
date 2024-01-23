@@ -36,6 +36,29 @@ class ModifiedR3D18(nn.Module):
     def summary(self, input_size):
         summary(self, input_size=input_size)
 
+class Modified2plus1(nn.Module):
+    def __init__(self):
+        super(Modified2plus1, self).__init__()
+        self.r2plus1d_18 = models.video.r2plus1d_18(
+            weights=models.video.R2Plus1D_18_Weights.DEFAULT
+        )
+        num_ftrs = self.r2plus1d_18.fc.in_features
+        self.r2plus1d_18.fc = nn.Sequential(
+            nn.Linear(num_ftrs, 1)         
+        )
+
+    def to_device(self, device):
+        self.r2plus1d_18 = self.r2plus1d_18.to(device)
+
+    def load_weights(self, path_file: str):
+        self.load_state_dict(torch.load(path_file))
+
+    def forward(self, x):
+        return self.r2plus1d_18(x)
+    
+    def summary(self, input_size):
+        summary(self, input_size=input_size)
+
 class ModifiedMC3_18(nn.Module):
     def __init__(self):
         super(ModifiedMC3_18, self).__init__()
