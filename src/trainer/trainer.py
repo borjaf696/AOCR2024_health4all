@@ -34,6 +34,8 @@ class DefaultTrainer:
             print(f"Created model: {selected_model}")
         elif selected_model == "mc3_18":
             self.model = ModifiedMC3_18().to(self.__device)
+        elif selected_model == "2plus1":
+            self.model = Modified2plus1().to(self.__device)
         elif selected_model == "efficientnet_v2":
             self.model = ModifiedEfficientNetv2().to(self.__device)
         else:
@@ -46,15 +48,26 @@ class DefaultTrainer:
         self.__validation_metrics = ClassificationMetrics(0, 0, 0, 0)
         # Selected model
         self.__selected_model = selected_model
+        # Train loop steps
+        self.__criterion = nn.BCEWithLogitsLoss()
+        # Set the seed to create reproducible experiments
+        torch.manual_seed(6543210)
         # Report model summary
         if show_summary:
             self.model.summary(input_size = (3, 40, 178, 150))
     
     def load_weights(self):
+        # Optimizer
+        optimizer = optim.AdamW(
+            self.model.parameters(), 
+            lr=1e-3
+        )
         # Load model if exists
         try:
-            self.model.load_weights(self.__weights_file)
-            original_epochs = self.__weights_file.split(".")[0].split("_")[-1]
+            checkpoint = torch.load(self.__weights_file)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            original_epochs = checkpoint['epoch']
             print(f"Loaded the model from {self.__weights_file}")
         except FileNotFoundError as e:
             original_epochs = 0
@@ -63,7 +76,7 @@ class DefaultTrainer:
             original_epochs = 0
             print(f"Exception {e} form path file: {self.__weights_file}")
 
-        return original_epochs
+        return original_epochs, optimizer
     
     def get_model(self):
         return self.model
@@ -74,32 +87,32 @@ class DefaultTrainer:
             val_loader: DataLoader, 
             num_epochs: int = 20
         ):
-        # Train loop steps
-        criterion = nn.BCEWithLogitsLoss()
-        optimizer = optim.AdamW(self.model.parameters(), lr=1e-3)
         # Move the model if possible
         if self.__device == torch.device("mps"):
             start_time = time.time()
             self.model.to_device(self.__device)
             end_time = time.time()
             print(f"Model and weights moved to GPU (MPS Mac), time spent: {end_time - start_time:.2f}s")
-        self.model.train()
         # Load the weights
-        original_epochs = self.load_weights()
+        original_epochs, optimizer = self.load_weights()
+        # Load the scheduler for the lr
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         # Number of epochs
         num_epochs = num_epochs
         print(f"Continue training after {original_epochs} for epochs {num_epochs}")
-        for epoch in range(num_epochs):
+        for epoch in range(original_epochs, num_epochs):
             total_loss = 0
             correct_predictions = 0
             total_predictions = 0
             progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch + 1}/{num_epochs}")
+            # Set model to train:
+            self.model.train()
             for batch_idx, (images, labels) in progress_bar:
                 images, labels = images.to(self.__device), labels.reshape((labels.size(0),1)).to(self.__device)
                 start = time.time()
                 outputs = self.model(images)
                 end = time.time()
-                loss = criterion(outputs.float(), labels.float())
+                loss = self.__criterion(outputs.float(), labels.float())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -112,21 +125,26 @@ class DefaultTrainer:
                 average_accuracy = correct_predictions / total_predictions
                 # Add extra metrics
                 self.__metrics += MetricUtils.calculate_metrics(predicted, labels)
+                # Count number of matches
+                total_matches = (predicted.float() == labels.float()).sum().item()
                 # Memory
                 memory_info = psutil.virtual_memory()
                 progress_bar.set_postfix(
                     {
                         'loss': total_loss / (batch_idx + 1), 
+                        'total_fails': int(total_matches),
                         'accuracy': average_accuracy,
                         'f1_score': self.__metrics.f1_score,
                         'memory_used': f"{memory_info.used / (1024**2):.2f}",
-                        'prediction_time': f"{end - start:.2f}s",
-                        'epoch labels balance': labels.float().mean(dim = 0)
+                        'labels balance': float(labels.float().mean(dim = 0)),
+                        'prediction labels balance': float(predicted.float().mean(dim = 0))
                     }
                 )
             # Validation
             valid_correct_predictions = 0
             valid_total_predictions = 0
+            # Set model to eval:
+            self.model.eval()
             with torch.no_grad():
                 for images, labels in val_loader:
                     images, labels = images.to(self.__device), labels.reshape((labels.size(0),1)).to(self.__device)
@@ -138,8 +156,19 @@ class DefaultTrainer:
                     # Calculate validation metrics
                     self.__validation_metrics += MetricUtils.calculate_metrics(predicted, labels)
                 average_accuracy = valid_correct_predictions / (valid_total_predictions + 1e-5)
-                print(f"Validation accuracy: {average_accuracy * 100:.2f}% F1-Score: {self.__validation_metrics.f1_score} Validation items: {valid_total_predictions}")
+                print(f"Validation accuracy: {average_accuracy * 100:.2f}% F1-Score: {self.__validation_metrics.f1_score}")
+                print(f"Validation number of positive predictions: {float(predicted.float().mean(dim = 0))} out of {valid_total_predictions}")
             # Store the current model just in case of failure
-            torch.save(self.model.state_dict(), f'tmp/{self.__preffix_model}_{self.__selected_model}_execution_{int(epoch) + int(original_epochs) + 1}.pth')
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": self.model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": loss,
+                }, 
+                f"tmp/{self.__preffix_model}_{self.__selected_model}_execution_{int(epoch) + 1}.pth"
+            )
+            # Update the scheduler
+            scheduler.step()
         
         return self.model
