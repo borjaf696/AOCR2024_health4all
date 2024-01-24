@@ -36,6 +36,10 @@ class ModifiedR3D18(nn.Module):
     def summary(self, input_size):
         summary(self, input_size=input_size)
 
+    def unfreeze(self):
+        for param in self.r3d_18.parameters():
+            param.requires_grad = True
+
 class Modified2plus1(nn.Module):
     def __init__(self):
         super(Modified2plus1, self).__init__()
@@ -58,6 +62,10 @@ class Modified2plus1(nn.Module):
     
     def summary(self, input_size):
         summary(self, input_size=input_size)
+
+    def unfreeze(self):
+        for param in self.r2plus1d_18.parameters():
+            param.requires_grad = True
 
 class ModifiedMC3_18(nn.Module):
     def __init__(self):
@@ -82,6 +90,10 @@ class ModifiedMC3_18(nn.Module):
     def summary(self, input_size):
         summary(self, input_size=input_size)
 
+    def unfreeze(self):
+        for param in self.mc3_18.parameters():
+            param.requires_grad = True
+
 class ModifiedEfficientNetv2(nn.Module):
     def __init__(self):
         super(ModifiedEfficientNetv2, self).__init__()
@@ -103,4 +115,7 @@ class ModifiedEfficientNetv2(nn.Module):
         return self.en2(x)
     
     def summary(self, input_size):
+        pass
+
+    def unfreeze(self):
         pass
