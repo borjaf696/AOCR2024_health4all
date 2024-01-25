@@ -95,6 +95,8 @@ class DefaultTrainer:
             print(f"Model and weights moved to GPU (MPS Mac), time spent: {end_time - start_time:.2f}s")
         # Load the weights
         original_epochs, optimizer = self.load_weights()
+        # Unfreeze the model layers for training
+        self.model.unfreeze()
         # Load the scheduler for the lr
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         # Number of epochs
@@ -132,7 +134,7 @@ class DefaultTrainer:
                 progress_bar.set_postfix(
                     {
                         'loss': total_loss / (batch_idx + 1), 
-                        'total_fails': int(total_matches),
+                        'total_matches': int(total_matches),
                         'accuracy': average_accuracy,
                         'f1_score': self.__metrics.f1_score,
                         'memory_used': f"{memory_info.used / (1024**2):.2f}",
