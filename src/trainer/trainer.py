@@ -38,6 +38,11 @@ class DefaultTrainer:
             self.model = Modified2plus1().to(self.__device)
         elif selected_model == "efficientnet_v2":
             self.model = ModifiedEfficientNetv2().to(self.__device)
+        elif selected_model == "custom_twoplusone":
+            self.model = TwoPlusOneModel3D(
+                in_channels = 3,
+                num_classes = 2
+            ).to(self.__device)
         else:
             raise RuntimeError
         # Weights file:

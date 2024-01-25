@@ -94,6 +94,45 @@ class ModifiedMC3_18(nn.Module):
         for param in self.mc3_18.parameters():
             param.requires_grad = True
 
+## Too slow :(
+class TwoPlusOneModel3D(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super(TwoPlusOneModel3D, self).__init__()
+        self.conv1 = nn.Conv3d(in_channels, 64, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv3d(64, 128, kernel_size=3, padding=1)
+        self.relu2 = nn.ReLU()
+        self.conv3_depthwise = nn.Conv3d(128, 128, kernel_size=3, padding=1, groups=128)
+        self.conv3_pointwise = nn.Conv3d(128, 128, kernel_size=1)
+        self.relu3 = nn.ReLU()
+        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.fc = nn.Linear(128, num_classes)
+    
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.conv3_depthwise(x)
+        x = self.conv3_pointwise(x)
+        x = self.relu3(x)
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+    def to_device(self, device):
+        self.to(device)
+
+    def load_weights(self, path_file: str):
+        self.load_state_dict(torch.load(path_file))
+
+    def summary(self, input_size):
+        summary(self, input_size=input_size)
+
+    def unfreeze(self):
+        pass
+
 class ModifiedEfficientNetv2(nn.Module):
     def __init__(self):
         super(ModifiedEfficientNetv2, self).__init__()
