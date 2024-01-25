@@ -36,7 +36,7 @@ device_volumes = torch.device("cpu")
 device_slices = torch.device("mps")
 
 last_model_files = {
-    "scan": "tmp/scan_r3d18_execution_15.pth",
+    "scan": "tmp/scan_r3d18_execution_3.pth",
     "slices": "tmp/slices_execution_5.pth"
 }
 
