@@ -28,7 +28,7 @@ from src.utils.utils import (
 
 filter_masks = False
 
-selected_model_volumes = "r3d18"
+selected_model_volumes = "custom_twoplusone"
 selected_model_slices = "efficientnet_v2"
 batch_size_volumes = 8
 batch_size_slices = 64
