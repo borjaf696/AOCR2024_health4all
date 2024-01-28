@@ -36,9 +36,16 @@ class ModifiedR3D18(nn.Module):
     def summary(self, input_size):
         summary(self, input_size=input_size)
 
-    def unfreeze(self):
-        for param in self.r3d_18.parameters():
-            param.requires_grad = True
+    def unfreeze(self, num_layers_to_unfreeze = 0):
+        modules = list(self.r3d_18.modules())
+        total_layers = len(modules)
+        for i in range(total_layers - num_layers_to_unfreeze):
+            for param in modules[i].parameters():
+                param.requires_grad = False
+        for i in range(total_layers - num_layers_to_unfreeze, total_layers):
+            for param in modules[i].parameters():
+                param.requires_grad = True
+    
 
 class Modified2plus1(nn.Module):
     def __init__(self):
@@ -156,5 +163,5 @@ class ModifiedEfficientNetv2(nn.Module):
     def summary(self, input_size):
         pass
 
-    def unfreeze(self):
+    def unfreeze(self, num_layers_to_unfreeze = 0):
         pass

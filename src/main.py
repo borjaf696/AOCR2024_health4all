@@ -28,7 +28,7 @@ from src.utils.utils import (
 
 filter_masks = False
 
-selected_model_volumes = "custom_twoplusone"
+selected_model_volumes = "r3d18"
 selected_model_slices = "efficientnet_v2"
 batch_size_volumes = 8
 batch_size_slices = 64
@@ -36,7 +36,7 @@ device_volumes = torch.device("cpu")
 device_slices = torch.device("mps")
 
 last_model_files = {
-    "scan": "tmp/scan_r3d18_execution_3.pth",
+    "scan": "tmp/scan_r3d18_execution_30.pth",
     "slices": "tmp/slices_execution_5.pth"
 }
 
@@ -98,7 +98,9 @@ def train_volumes(
     )
     model = trainer.fit(
         train_loader = train_loader,
-        val_loader = val_loader
+        val_loader = val_loader,
+        num_epochs = 30,
+        num_layers_to_unfreeze = 10
     )
     return model
 
@@ -129,7 +131,8 @@ def train_slices(selected_model = selected_model_slices):
     )
     model = trainer.fit(
         train_loader = train_loader,
-        val_loader = val_loader
+        val_loader = val_loader,
+        num_epochs = 5
     )
     return model
 

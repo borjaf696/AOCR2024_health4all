@@ -90,7 +90,8 @@ class DefaultTrainer:
             self, 
             train_loader: DataLoader, 
             val_loader: DataLoader, 
-            num_epochs: int = 20
+            num_epochs: int = 20,
+            num_layers_to_unfreeze: int = 9
         ):
         # Move the model if possible
         if self.__device == torch.device("mps"):
@@ -101,7 +102,7 @@ class DefaultTrainer:
         # Load the weights
         original_epochs, optimizer = self.load_weights()
         # Unfreeze the model layers for training
-        self.model.unfreeze()
+        self.model.unfreeze(num_layers_to_unfreeze = num_layers_to_unfreeze)
         # Load the scheduler for the lr
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         # Number of epochs
